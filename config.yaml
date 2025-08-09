@@ -1,0 +1,9 @@
+engine:
+  model:
+    det:
+      path: ./models/PP-OCRv5_mobile_det/inference.onnx
+      input_shape: [3, 640, 640]
+    rec:
+      path: ./models/PP-OCRv5_mobile_rec/inference.onnx
+      input_shape: [3, 32, 320]
+      dict_path: ./dict/ppocrv5_dict.txt
