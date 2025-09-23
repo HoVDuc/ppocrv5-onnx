@@ -3,8 +3,7 @@
 This repo runs PaddleOCR v5 (detection + recognition) exported to ONNX with onnxruntime, using uv for dependency management and execution.
 
 ## Requirements
-- Linux
-- Python 3.12+
+- Python 3.10+
 - uv (https://docs.astral.sh/uv/) – fast Python package/dependency manager
 
 ## Install uv
@@ -114,6 +113,32 @@ ppocr/
   rec/ ...
 dict/ppocrv5_dict.txt
 ```
+## Model export (Paddle2ONNX)
+Clone the PaddleOCR repo if you haven't already:
+```sh
+git clone https://github.com/PaddlePaddle/PaddleOCR.git
+```
+
+Step 1
+Export model to inference format using PaddlePaddle tools. Example for detection model:
+```sh
+cd PaddleOCR
+python3 tools/export_model.py -c=configs/rec/PP-OCRv5/PP-OCRv5_server_rec.yml -o \
+        Global.pretrained_model=/path/PP-OCRv5_server_rec_pretrained.pdparams \ 
+        Global.save_inference_dir=./PP-OCRv5_server_rec/
+```
+
+Step 2
+Convert the exported model to ONNX format using `paddle2onnx`. Example command:
+```sh
+paddle2onnx --model_dir /path/PP-OCRv5_server_rec_infer \
+--model_filename inference.json \
+--params_filename inference.pdiparams \
+--save_file model.onnx \
+--opset_version 17 \
+--enable_onnx_checker True
+```
+
 
 ## Troubleshooting
 - Missing dependency? `uv add <name>` and re-run `uv sync`.
