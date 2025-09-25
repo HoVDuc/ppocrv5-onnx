@@ -10,6 +10,7 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config")
     parser.add_argument("--det-only", action="store_true", help="Run detection only")
     parser.add_argument("--rec-only", action="store_true", help="Run recognition only")
+    parser.add_argument("--vis", action="store_true", help="Visualize the results")
     parser.add_argument(
         "--providers",
         nargs="*",
@@ -35,6 +36,7 @@ def main():
         rec=rec,
         detector=detector if det else None,
         recognizer=recognizer if rec else None,
+        visualize=args.vis,
     )
 
     print(result)

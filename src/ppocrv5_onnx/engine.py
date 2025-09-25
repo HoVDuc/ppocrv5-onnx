@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import os
 from typing import List, Optional
 import time
 import math
@@ -8,16 +9,22 @@ import numpy as np
 import onnxruntime as ort
 from loguru import logger
 
+from ppocr.tools.visualizer import draw_image
 from ppocr.det.crop_poly import CropPoly
 from ppocr.det.postprocess import DBPostProcess
 from ppocr.det.preprocess import DetResizeForTest, NormalizeImage
 from ppocr.rec.postprocess import CTCLabelDecode
+from ppocrv5_onnx.utils import load_config
 
+# Load config for visualization parameters
+config = load_config("config.yaml")
+vis_config = config.get("visualize", {})
 
 @dataclass
 class Result:
     text: str
     box: np.ndarray
+    score: Optional[float] = None
 
 
 class Detector:
@@ -142,6 +149,14 @@ class Recognizer:
         )
         return text
 
+def visualizer(results: List[Result], image: np.ndarray):
+    boxes = [res.box.astype(np.int32) for res in results]
+    txts = np.array([res.text for res in results if res.text], dtype=object)
+    det_only = False
+    if len(txts) == 0:
+        det_only = True
+        txts = np.array(["" for _ in range(len(boxes))], dtype=object)
+    return draw_image(image, boxes, txts, det_only)
 
 def run_ocr(
     img_path: str,
@@ -149,6 +164,7 @@ def run_ocr(
     rec: bool = True,
     detector: Optional[Detector] = None,
     recognizer: Optional[Recognizer] = None,
+    visualize: bool = True,
 ):
     """Run OCR pipeline on a single image path.
 
@@ -170,16 +186,38 @@ def run_ocr(
         results: List[Result] = []
         for box in boxes:
             crop = detector.crop_poly.get_minarea_rect_crop(image, box)
-            text = recognizer.recognize(crop)
-            results.append(Result(text=text, box=box))
+            rec_result = recognizer.recognize(crop)
+            text, score = rec_result[0]
+            results.append(Result(text=text, box=box, score=score))
         t1 = time.time()
         logger.info(f"Processing time: {t1 - t0:.2f} seconds")
+        if visualize:
+            filename = img_path.split("/")[-1]
+            # Check folder exists
+            if not os.path.exists(vis_config.get("save_dir", "output")):
+                os.makedirs(vis_config.get("save_dir", "output"))
+            filename = f"{vis_config.get("save_dir", "output")}/vis_{filename}"
+            logger.info(f"Saving visualized result to {filename}")
+            visualizer(results, image)["ocr_res_img"].save(filename)
         return results
 
     if det:
         if detector is None:
             raise ValueError("Detector must be provided when det=True and rec=False")
-        return detector.detect(image)
+        
+        boxes = detector.detect(image)
+        if visualize:
+            if not os.path.exists(vis_config.get("save_dir", "output")):
+                os.makedirs(vis_config.get("save_dir", "output"))
+            bboxes = boxes[0][0]
+            results: List[Result] = []
+            for box in bboxes:
+                text, score = "", 0.0
+                results.append(Result(text=text, box=box, score=score))
+            visualizer(results, image)["ocr_res_img"].save(
+                os.path.join(vis_config.get("save_dir", "output"), f"vis_{os.path.basename(img_path)}")
+            )
+        return boxes
 
     if rec:
         if recognizer is None:

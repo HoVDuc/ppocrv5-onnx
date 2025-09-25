@@ -7,3 +7,7 @@ engine:
       path: ./models/PP-OCRv5_mobile_rec/inference.onnx
       input_shape: [3, 32, 320]
       dict_path: ./dict/ppocrv5_dict.txt
+visualize:
+  font_path: fonts/simfang.ttf
+  save_dir: output
+  box_thickness: 2

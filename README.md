@@ -48,6 +48,10 @@ engine:
       path: ./models/PP-OCRv5_mobile_rec/inference.onnx
       input_shape: [3, 32, 320]
       dict_path: ./dict/ppocrv5_dict.txt
+visualize:
+  font_path: fonts/simfang.ttf
+  save_dir: output
+  box_thickness: 2
 ```
 Adjust paths if you relocate models or the dictionary.
 
@@ -70,9 +74,9 @@ uv run ppocrv5-onnx path/to/image.jpg --det-only
 uv run ppocrv5-onnx path/to/image.jpg --rec-only
 ```
 
-- Select ONNX Runtime providers (e.g., CUDA + CPU):
+- With visualization:
 ```sh
-uv run ppocrv5-onnx path/to/image.jpg --providers CUDAExecutionProvider CPUExecutionProvider
+uv run ppocrv5-onnx path/to/image.jpg --vis
 ```
 
 - Run via Python module directly:
@@ -82,8 +86,8 @@ uv run python main.py path/to/image.jpg --config config.yaml
 
 - Programmatic usage:
 ```python
-from utils import load_config
-from engine import Detector, Recognizer, run_ocr
+from ppocrv5_onnx.utils import load_config
+from ppocrv5_onnx.engine import Detector, Recognizer, run_ocr
 
 cfg = load_config('config.yaml')
 detector = Detector(cfg)
@@ -101,10 +105,14 @@ print(results)
 ## Project structure (excerpt)
 ```
 config.yaml
-engine.py
 main.py
 pyproject.toml
-utils.py
+src/
+  ppocrv5_onnx/
+    __init__.py
+    cli.py
+    engine.py
+    utils.py
 models/
   PP-OCRv5_mobile_det/inference.onnx
   PP-OCRv5_mobile_rec/inference.onnx
@@ -112,7 +120,9 @@ ppocr/
   det/ ...
   rec/ ...
 dict/ppocrv5_dict.txt
+fonts/simfang.ttf
 ```
+
 ## Model export (Paddle2ONNX)
 Clone the PaddleOCR repo if you haven't already:
 ```sh
@@ -124,7 +134,7 @@ Export model to inference format using PaddlePaddle tools. Example for detection
 ```sh
 cd PaddleOCR
 python3 tools/export_model.py -c=configs/rec/PP-OCRv5/PP-OCRv5_server_rec.yml -o \
-        Global.pretrained_model=/path/PP-OCRv5_server_rec_pretrained.pdparams \ 
+        Global.pretrained_model=/path/PP-OCRv5_server_rec_pretrained.pdparams \
         Global.save_inference_dir=./PP-OCRv5_server_rec/
 ```
 
