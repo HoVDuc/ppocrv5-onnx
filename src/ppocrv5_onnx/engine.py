@@ -115,10 +115,11 @@ class Recognizer:
             pad_w = 3200
         else:
             ratio = w / float(h)
-            resized_w = imgW if math.ceil(imgH * ratio) > imgW else int(math.ceil(imgH * ratio))
-            resized_w = min(resized_w, imgW)
+            resized_w = int(math.ceil(imgH * ratio))
+            if resized_w > dyn_imgW:
+                resized_w = dyn_imgW
             resized_image = cv2.resize(img, (resized_w, imgH))
-            pad_w = imgW
+            pad_w = dyn_imgW
 
         resized_image = resized_image.astype("float32")
         resized_image = resized_image.transpose((2, 0, 1)) / 255.0
@@ -184,8 +185,9 @@ def run_ocr(
         # NOTE: The postprocessor structure returns nested lists; keep indexing to maintain behavior
         boxes = detector.detect(image)[0][0]
         results: List[Result] = []
-        for box in boxes:
+        for idx, box in enumerate(boxes):
             crop = detector.crop_poly.get_minarea_rect_crop(image, box)
+            cv2.imwrite("debug/crop_{}.png".format(idx), crop)
             rec_result = recognizer.recognize(crop)
             text, score = rec_result[0]
             results.append(Result(text=text, box=box, score=score))

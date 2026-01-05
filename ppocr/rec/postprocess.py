@@ -184,6 +184,11 @@ class CTCLabelDecode(BaseRecLabelDecode):
             preds = preds[-1]
         # if isinstance(preds, paddle.Tensor):
             # preds = preds.numpy()
+        
+        # Check if preds are logits or probabilities
+        if not np.allclose(np.sum(preds, axis=2), 1.0, atol=1e-4):
+            preds = self.softmax(preds)
+
         preds_idx = preds.argmax(axis=2)
 
         # Get the probabilities of the predicted characters second 
@@ -208,6 +213,11 @@ class CTCLabelDecode(BaseRecLabelDecode):
     def add_special_char(self, dict_character):
         dict_character = ["blank"] + dict_character
         return dict_character
+
+    def softmax(self, x):
+        max_x = np.max(x, axis=2, keepdims=True)
+        e_x = np.exp(x - max_x)
+        return e_x / np.sum(e_x, axis=2, keepdims=True)
     
 if __name__ == "__main__":
     postprcess = CTCLabelDecode(
