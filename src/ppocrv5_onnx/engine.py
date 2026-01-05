@@ -187,7 +187,6 @@ def run_ocr(
         results: List[Result] = []
         for idx, box in enumerate(boxes):
             crop = detector.crop_poly.get_minarea_rect_crop(image, box)
-            cv2.imwrite("debug/crop_{}.png".format(idx), crop)
             rec_result = recognizer.recognize(crop)
             text, score = rec_result[0]
             results.append(Result(text=text, box=box, score=score))

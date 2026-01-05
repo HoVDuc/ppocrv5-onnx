@@ -97,6 +97,10 @@ results = run_ocr('path/to/image.jpg', det=True, rec=True, detector=detector, re
 print(results)
 ```
 
+## Demo
+
+![Demo](img/demo.png)
+
 ## Common uv commands
 - Install/sync env from lockfile: `uv sync`
 - Add/remove a package: `uv add <pkg>`, `uv remove <pkg>`
