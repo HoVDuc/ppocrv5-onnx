@@ -11,6 +11,9 @@ class DetResizeForTest:
     def __init__(self, input_shape=None, max_side_limit=4000, **kwargs):
         self.resize_type = 0
         self.keep_ratio = False
+        self.limit_side_len = None
+        self.limit_type = None
+        
         if input_shape is not None:
             self.input_shape = input_shape
             self.resize_type = 3
@@ -19,12 +22,14 @@ class DetResizeForTest:
             self.resize_type = 1
             if "keep_ratio" in kwargs:
                 self.keep_ratio = kwargs["keep_ratio"]
+        elif "resize_long" in kwargs:
+            # resize_long mode: resize so that the longest side equals resize_long
+            self.resize_type = 2
+            self.limit_side_len = kwargs.get("resize_long", 960)
+            self.limit_type = "resize_long"
         elif "limit_side_len" in kwargs:
             self.limit_side_len = kwargs["limit_side_len"]
             self.limit_type = kwargs.get("limit_type", "min")
-        elif "resize_long" in kwargs:
-            self.resize_type = 2
-            self.resize_long = kwargs.get("resize_long", 960)
         else:
             self.limit_side_len = 736
             self.limit_type = "min"

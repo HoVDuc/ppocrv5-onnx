@@ -39,26 +39,53 @@ class Detector:
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
-        # Pre/Post
-        self.preprocessor = DetResizeForTest()
+        # Get detection config
+        det_config = config.engine.model.det
+        
+        # Use resize_long for dynamic shape support (same as official inference.yml)
+        # Default to 960 as per official PP-OCRv5 config
+        self.resize_long = getattr(det_config, 'resize_long', 960)
+        
+        # For backward compatibility: if input_shape is specified, calculate target_size from it
+        if hasattr(det_config, 'input_shape'):
+            det_shape = list(det_config.input_shape)
+            if len(det_shape) == 3:
+                _, det_h, det_w = det_shape
+                self.resize_long = max(int(det_h), int(det_w))
+                logger.warning(
+                    f"Using deprecated 'input_shape' config. Please use 'resize_long: {self.resize_long}' instead."
+                )
+        
+        # Pre/Post processors with configurable parameters (aligned with official config)
+        self.preprocessor = DetResizeForTest(resize_long=self.resize_long)
         self.normalize = NormalizeImage(order="hwc")
-        self.postprocessor = DBPostProcess(unclip_ratio=1.0)
+        
+        # PostProcess parameters from config (with official defaults)
+        thresh = getattr(det_config, 'thresh', 0.3)
+        box_thresh = getattr(det_config, 'box_thresh', 0.6)
+        unclip_ratio = getattr(det_config, 'unclip_ratio', 1.5)
+        max_candidates = getattr(det_config, 'max_candidates', 1000)
+        
+        self.postprocessor = DBPostProcess(
+            thresh=thresh,
+            box_thresh=box_thresh,
+            unclip_ratio=unclip_ratio,
+            max_candidates=max_candidates
+        )
         self.crop_poly = CropPoly()
-
-        # Use configured input shape to pick a reasonable target size
-        # Expecting [C, H, W]
-        det_shape = list(config.engine.model.det.input_shape)
-        if len(det_shape) != 3:
-            raise ValueError(f"det.input_shape must be [C, H, W], got: {det_shape}")
-        _, det_h, det_w = det_shape
-        self.target_size = max(int(det_h), int(det_w))
+        
+        logger.info(
+            f"Detector initialized with resize_long={self.resize_long}, "
+            f"thresh={thresh}, box_thresh={box_thresh}, unclip_ratio={unclip_ratio}"
+        )
 
     def detect(self, image: np.ndarray):
         if image is None:
             raise ValueError("Input image is None")
         logger.info(f"Image shape: {image.shape}")
 
-        data = self.preprocessor([image], self.target_size)
+        # Use resize_long strategy (keep aspect ratio, resize longest side)
+        data = self.preprocessor([image], limit_side_len=self.resize_long, limit_type="resize_long")
         input_tensor = data[0]
         input_tensor = self.normalize(input_tensor)
         input_tensor = input_tensor[0].transpose((2, 0, 1))  # HWC -> CHW

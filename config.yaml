@@ -2,7 +2,14 @@ engine:
   model:
     det:
       path: ./models/PP-OCRv5_mobile_det/inference.onnx
-      input_shape: [3, 640, 640]
+      # Use resize_long instead of fixed input_shape (same as official inference.yml)
+      # resize_long: resize image so that the longer side equals this value, keeping aspect ratio
+      resize_long: 960
+      # PostProcess parameters (aligned with official config)
+      thresh: 0.3
+      box_thresh: 0.6
+      unclip_ratio: 1.5
+      max_candidates: 1000
     rec:
       path: ./models/PP-OCRv5_mobile_rec/inference.onnx
       input_shape: [3, 32, 320]
