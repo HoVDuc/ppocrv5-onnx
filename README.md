@@ -43,7 +43,12 @@ engine:
   model:
     det:
       path: ./models/PP-OCRv5_mobile_det/inference.onnx
-      input_shape: [3, 640, 640]
+      # resize_long: resize image so that the longer side equals this value (keeps aspect ratio)
+      resize_long: 960 
+      # PostProcess parameters (aligned with official PP-OCRv5 config)
+      thresh: 0.3
+      box_thresh: 0.6
+      unclip_ratio: 1.5
     rec:
       path: ./models/PP-OCRv5_mobile_rec/inference.onnx
       input_shape: [3, 32, 320]
@@ -53,7 +58,7 @@ visualize:
   save_dir: output
   box_thickness: 2
 ```
-Adjust paths if you relocate models or the dictionary.
+`resize_long` is used instead of a fixed `input_shape` for detection to match official PaddleOCR behavior and prevent image distortion. Adjust paths if you relocate models or the dictionary.
 
 ## Run
 You can run either via the console script or directly with Python.
@@ -134,7 +139,7 @@ git clone https://github.com/PaddlePaddle/PaddleOCR.git
 ```
 
 Step 1
-Export model to inference format using PaddlePaddle tools. Example for detection model:
+Export model to inference format using PaddlePaddle tools. Example for recognize model:
 ```sh
 cd PaddleOCR
 python3 tools/export_model.py -c=configs/rec/PP-OCRv5/PP-OCRv5_server_rec.yml -o \
