@@ -1,12 +1,11 @@
 from typing import Union
 import numpy as np 
 import cv2
-from loguru import logger as loguru_logger
-from loguru import logger as logging
+from loguru import logger
 import math
 
-class DetResizeForTest:
-    """DetResizeForTest"""
+class DetResize:
+    """DetResize for text detection preprocessing"""
 
     def __init__(self, input_shape=None, max_side_limit=4000, **kwargs):
         self.resize_type = 0
@@ -63,16 +62,10 @@ class DetResizeForTest:
         limit_type: Union[str, None],
         max_side_limit: Union[int, None] = None,
     ):
-        loguru_logger.info(
-            "Resize image with limit_side_len: {}, limit_type: {}, max_side_limit: {}".format(
-                limit_side_len, limit_type, max_side_limit
-            )
-        )
         src_h, src_w, _ = img.shape
         if sum([src_h, src_w]) < 64:
             img = self.image_padding(img)
 
-        loguru_logger.info("resize_type: {}".format(self.resize_type))
         img, [ratio_h, ratio_w] = self.resize_image_type0(
             img, limit_side_len, limit_type, max_side_limit
         )
@@ -130,10 +123,6 @@ class DetResizeForTest:
         resize_w = int(w * ratio)
 
         if max(resize_h, resize_w) > max_side_limit:
-            logging.warning(
-                f"Resized image size ({resize_h}x{resize_w}) exceeds max_side_limit of {max_side_limit}. "
-                f"Resizing to fit within limit."
-            )
             ratio = float(max_side_limit) / max(resize_h, resize_w)
             resize_h, resize_w = int(resize_h * ratio), int(resize_w * ratio)
 
@@ -148,14 +137,10 @@ class DetResizeForTest:
                 return None, (None, None)
             img = cv2.resize(img, (int(resize_w), int(resize_h)))
         except:
-            logging.info(img.shape, resize_w, resize_h)
             raise
 
         ratio_h = resize_h / float(h)
         ratio_w = resize_w / float(w)
-        loguru_logger.info(
-            f"Resize image from ({h}, {w}) to ({resize_h}, {resize_w}) with ratios ({ratio_h}, {ratio_w})."
-        )
         return img, [ratio_h, ratio_w]
 
 class NormalizeImage:

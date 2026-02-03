@@ -82,24 +82,3 @@ class CropPoly:
         if dst_img_height * 1.0 / dst_img_width >= 1.5:
             dst_img = np.rot90(dst_img)
         return dst_img
-    
-
-    # def __call__(self, img: np.ndarray, dt_polys: List[list]) -> List[dict]:
-    #     if self.det_box_type == "quad":
-    #         dt_boxes = np.array(dt_polys)
-    #         output_list = []
-    #         for bno in range(len(dt_boxes)):
-    #             tmp_box = copy.deepcopy(dt_boxes[bno])
-    #             img_crop = self.get_minarea_rect_crop(img, tmp_box)
-    #             output_list.append(img_crop)
-    #     elif self.det_box_type == "poly":
-    #         output_list = []
-    #         dt_boxes = dt_polys
-    #         for bno in range(len(dt_boxes)):
-    #             tmp_box = copy.deepcopy(dt_boxes[bno])
-    #             img_crop = self.get_poly_rect_crop(img.copy(), tmp_box)
-    #             output_list.append(img_crop)
-    #     else:
-    #         raise NotImplementedError
-
-    #     return output_list

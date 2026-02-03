@@ -5,7 +5,7 @@ import numpy as np
 from shapely.geometry import Polygon
 import pyclipper
 import math
-from loguru import logger as loguru_logger
+from loguru import logger
 # import paddle2onnx
 
 class DBPostProcess:
@@ -72,9 +72,6 @@ class DBPostProcess:
             if sside < self.min_size:
                 continue
             points = np.array(points)
-            loguru_logger.debug(
-                f"DBPostProcess: score_mode={self.score_mode}, self.min_size={self.min_size}, sside={sside}."
-            )
             # if self.score_mode == "fast":
             score = self.box_score_fast(pred, points.reshape(-1, 2))
             # else:
@@ -94,10 +91,6 @@ class DBPostProcess:
 
             boxes.append(box.astype(np.int16))
             scores.append(score)
-
-        loguru_logger.info(
-            f"DBPostProcess: Found {len(boxes)} boxes with scores above {box_thresh}."
-        )
 
         return np.array(boxes, dtype=np.int16), scores
 
@@ -138,7 +131,6 @@ class DBPostProcess:
 
     def box_score_fast(self, bitmap, _box):
         """box_score_fast: use bbox mean score as the mean score"""
-        loguru_logger.info("DBPostProcess: Using fast box score calculation.")
         h, w = bitmap.shape[:2]
         box = _box.copy()
         xmin = max(0, min(math.floor(box[:, 0].min()), w - 1))
@@ -162,12 +154,6 @@ class DBPostProcess:
     ):
         """apply"""
         boxes, scores = [], []
-        loguru_logger.info(
-            f"DBPostProcess: thresh={thresh or self.thresh}, "
-            f"box_thresh={box_thresh or self.box_thresh}, "
-            f"unclip_ratio={unclip_ratio or self.unclip_ratio}"
-        )
-
         for pred, img_shape in zip(preds[0], img_shapes):
             box, score = self.process(
                 pred,
@@ -188,7 +174,6 @@ class DBPostProcess:
         box_thresh,
         unclip_ratio,
     ):
-        print(pred.shape)
         pred = pred[0, :, :]
         segmentation = pred > thresh
         dilation_kernel = None if not self.use_dilation else np.array([[1, 1], [1, 1]])
@@ -201,12 +186,6 @@ class DBPostProcess:
         else:
             mask = segmentation
         
-        # plt.imshow(mask, cmap='gray')
-        # plt.title('Segmentation Mask')
-        # plt.axis('off')
-        # plt.show()
-        
-        loguru_logger.info("Box type: {}".format(self.box_type))
         if self.box_type == "poly":
             boxes, scores = self.polygons_from_bitmap(
                 pred, mask, src_w, src_h, box_thresh, unclip_ratio
@@ -219,11 +198,6 @@ class DBPostProcess:
             # Draw the polygons on the mask for visualization
             for box in boxes:
                 cv2.polylines(pred, [box.astype(np.int32)], isClosed=True, color=1, thickness=1)
-
-            # plt.imshow(pred, cmap='gray')
-            # plt.title('Detected Polygons')
-            # plt.axis('off')
-            # plt.show()
         else:
             raise ValueError("box_type can only be one of ['quad', 'poly']")
         return boxes, scores
