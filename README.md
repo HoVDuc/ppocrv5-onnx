@@ -3,6 +3,7 @@
 This repo runs PaddleOCR v5 (detection + recognition) exported to ONNX with onnxruntime, using uv for dependency management and execution.
 
 ## Recent updates
+- **2026-05-19**: Include Apache License 2.0
 - **2026-02-10**: feat: Add OCR configuration classes and YAML support
 - **2026-02-03**: feat: Add OCR text detection and recognition modules
 - **2026-01-10**: fix: align detection with official PP-OCRv5 resize & params (#2)
