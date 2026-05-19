@@ -240,3 +240,9 @@ paddle2onnx --model_dir /path/PP-OCRv5_server_rec_infer \
       rec_providers=["CUDAExecutionProvider"]
   )
   ```
+
+## License
+
+This project uses and adapts components/concepts from PaddleOCR, which is licensed under the Apache License 2.0.
+
+Third-party models, fonts, dictionaries, and upstream assets retain their original licenses.
