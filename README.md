@@ -3,7 +3,7 @@
 This repo runs PaddleOCR v5 and v6 detection/recognition models exported to ONNX with onnxruntime, using uv for dependency management and execution.
 
 ## Recent updates
-- **2026-06-24**: feat: Add PP-OCRv6 medium ONNX config presets, v6 dictionary packaging, and independent detector/recognizer mixing
+- **2026-06-24**: feat: Support all GitHub release ONNX presets (v5/v6), inference.yml defaults, det/rec mixing, and recognition benchmark table
 - **2026-05-19**: Include Apache License 2.0
 - **2026-02-10**: feat: Add OCR configuration classes and YAML support
 - **2026-02-03**: feat: Add OCR text detection and recognition modules
@@ -131,6 +131,30 @@ Supported preset names (all auto-download from [GitHub Releases](https://github.
 
 Preset defaults are loaded from the `inference.yml` bundled inside each release zip. Recognition dictionaries are materialized once as `character_dict.txt` next to the ONNX model. Packaged `ppocrv5_dict.txt` / `ppocrv6_dict.txt` remain available for manual `from_model_paths()` usage.
 
+## Detection benchmark (supported models)
+
+| Model | Average | Handwritten CN | Handwritten EN | Printed CN | Printed EN | Traditional Chinese | Ancient Text | Japanese | Blur | Emoji | Warp | Pinyin | Artistic | Table | Rotation | Industrial | General |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| PP-OCRv5_server | 81.6 | 80.3 | 84.1 | 94.5 | 91.7 | 81.5 | 67.6 | 77.2 | 90.1 | 96.2 | 87.6 | 67.1 | 67.3 | 97.1 | 80.0 | 64.3 | 79.7 |
+| PP-OCRv5_mobile | 75.2 | 74.4 | 77.7 | 90.5 | 91.0 | 82.3 | 58.1 | 72.7 | 87.4 | 93.6 | 82.7 | 57.5 | 52.5 | 92.8 | 64.7 | 52.8 | 72.1 |
+| **PP-OCRv6_medium** | **86.2** | **83.7** | **84.0** | **95.1** | **93.7** | **86.3** | **80.2** | **84.3** | **94.1** | **99.6** | **88.6** | **74.0** | **69.0** | **96.8** | **93.8** | **73.3** | **82.8** |
+| PP-OCRv6_small | 84.1 | 80.5 | 87.1 | 94.2 | 93.6 | 85.7 | 72.6 | 82.3 | 92.6 | 99.7 | 87.6 | 69.6 | 65.3 | 95.6 | 93.7 | 67.6 | 78.2 |
+| PP-OCRv6_tiny | 80.6 | 79.4 | 85.9 | 93.1 | 92.3 | 83.7 | 63.0 | 76.6 | 89.3 | 99.8 | 86.1 | 59.0 | 60.1 | 94.7 | 91.0 | 62.0 | 73.8 |
+
+Source: [PaddlePaddle/PP-OCRv6_small_det_safetensors](https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_safetensors)
+
+## Recognition benchmark (supported models)
+
+| Model | W-Avg | Handwritten CN | Handwritten EN | Printed CN | Printed EN | TC | Ancient | JP | Confusable | Special | General | Pinyin | Artistic | Industrial | Screen | Card |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| PP-OCRv5_server | 78.1 | 58.0 | 59.6 | 90.1 | 85.1 | 74.7 | 60.4 | 73.7 | 59.4 | 56.8 | 86.5 | 74.4 | 64.0 | 70.2 | 68.1 | 87.6 |
+| PP-OCRv5_mobile | 73.7 | 41.7 | 50.9 | 86.0 | 86.0 | 72.0 | 57.8 | 75.8 | 55.7 | 54.8 | 80.7 | 72.5 | 54.0 | 59.3 | 57.6 | 81.7 |
+| **PP-OCRv6_medium** | **83.2** | **62.1** | **67.8** | **91.5** | **94.1** | **78.6** | **72.4** | **90.5** | **64.9** | **61.7** | **87.5** | **78.1** | **71.2** | **77.4** | **82.5** | **88.1** |
+| PP-OCRv6_small | 81.3 | 57.6 | 61.1 | 90.5 | 93.3 | 77.0 | 71.1 | 88.2 | 64.1 | 60.2 | 85.7 | 75.9 | 68.4 | 76.4 | 79.7 | 86.9 |
+| PP-OCRv6_tiny | 73.5 | 40.1 | 39.3 | 86.7 | 88.4 | 65.0 | 68.4 | 89.8 | 52.3 | 57.1 | 78.0 | 65.4 | 54.7 | 62.1 | 71.2 | 80.5 |
+
+Source: [PaddlePaddle/PP-OCRv6_medium_rec_safetensors](https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_safetensors)
+
 ## Usage
 
 ### Quick Start (Recommended)
@@ -197,9 +221,9 @@ results = pipeline("path/to/image.jpg")
 
 ### PP-OCRv6 Notes
 
-PP-OCRv6 medium recognition uses `input_shape=[3, 48, 320]` and `ppocrv6_dict.txt`. `OCRPipeline.from_model_paths()` detects v6 recognizer paths and defaults to these values when `dict_path` and `input_shape` are not provided.
+PP-OCRv6 presets load recognition `input_shape` and character dictionaries from each model's bundled `inference.yml`. `OCRPipeline.from_model_paths()` still detects v6 recognizer paths and defaults to `input_shape=[3, 48, 320]` plus packaged `ppocrv6_dict.txt` when overrides are omitted.
 
-Model `.onnx` files are not committed to this repository. Use `from_pretrained()` after release assets are available, or point YAML/direct-path config at local ONNX files such as:
+Model `.onnx` files are not committed to this repository. Use `from_pretrained()` to auto-download release assets, or point YAML/direct-path config at local ONNX files such as:
 - `model/PP-OCRv6_medium_det_onnx/inference.onnx`
 - `model/PP-OCRv6_medium_rec_onnx/inference.onnx`
 
@@ -259,8 +283,8 @@ ppocrv5-onnx/
 ├── models/                  # Download/cache location for preset models
 │   ├── PP-OCRv5_mobile_det/inference.onnx
 │   ├── PP-OCRv5_mobile_rec/inference.onnx
-│   ├── PP-OCRv6_medium_det/inference.onnx
-│   └── PP-OCRv6_medium_rec/inference.onnx
+│   ├── PP-OCRv6_medium_det_onnx/inference.onnx
+│   └── PP-OCRv6_medium_rec_onnx/inference.onnx
 ├── model/                   # Optional local dev model paths, gitignored
 │   ├── PP-OCRv6_medium_det_onnx/inference.onnx
 │   └── PP-OCRv6_medium_rec_onnx/inference.onnx
@@ -298,7 +322,7 @@ paddle2onnx --model_dir /path/PP-OCRv5_server_rec_infer \
 - Missing dependency? `uv add <name>` and re-run `uv sync`.
 - Path errors for models/dict? Verify the paths in `config.yaml`, `config_ppocrv6.yaml`, or your custom config are correct relative to the repo root.
 - `IndexError` during recognition decode usually means the recognizer dictionary does not match the recognizer ONNX model. Use `ppocrv6_dict.txt` with PP-OCRv6 medium recognition.
-- `from_pretrained("ppocrv6_medium")` requires PP-OCRv6 release zip assets to be available. Until those assets are published, use `config_ppocrv6.yaml` or `from_model_paths()` with local ONNX files.
+- `from_pretrained("ppocrv6_medium")` downloads PP-OCRv6 assets from [GitHub Releases](https://github.com/HoVDuc/ppocrv5-onnx/releases). For offline use, place ONNX files locally and use `config_ppocrv6.yaml` or `from_model_paths()`.
 - OpenCV display errors on servers? Use `opencv-python-headless`.
 - GPU not used? Ensure CUDA drivers/runtime are installed and use GPU providers:
   ```python
