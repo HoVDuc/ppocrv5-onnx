@@ -1,7 +1,7 @@
 [project]
 name = "ppocrv5-onnx"
-version = "1.0.0"
-description = "PP-OCRv5 ONNX runtime with uv"
+version = "1.1.0"
+description = "PP-OCRv5/PP-OCRv6 ONNX runtime with uv"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -23,7 +23,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ppocrv5_onnx", "ppocrv5_onnx.*"]
+namespaces = false
 
 [tool.setuptools.package-data]
-ppocrv5_onnx = ["data/dict/ppocrv5_dict.txt", "data/fonts/simfang.ttf"]
-
+ppocrv5_onnx = [
+  "data/dict/ppocrv5_dict.txt",
+  "data/dict/ppocrv6_dict.txt",
+  "data/fonts/simfang.ttf",
+]
