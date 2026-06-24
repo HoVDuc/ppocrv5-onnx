@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+import os
 import urllib.request
 import zipfile
 
@@ -10,7 +11,16 @@ from loguru import logger
 import yaml
 
 PACKAGE_DIR = Path(__file__).parent
-MODELS_DIR = PACKAGE_DIR / "models"
+
+
+def _default_models_dir() -> Path:
+    """Return the default ONNX model cache outside the importable package."""
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    base = Path(cache_home) if cache_home else Path.home() / ".cache"
+    return base / "ppocrv5_onnx" / "models"
+
+
+MODELS_DIR = _default_models_dir()
 V5_DICT_PATH = PACKAGE_DIR / "data/dict/ppocrv5_dict.txt"
 V6_DICT_PATH = PACKAGE_DIR / "data/dict/ppocrv6_dict.txt"
 FONT_PATH = PACKAGE_DIR / "data/fonts/simfang.ttf"

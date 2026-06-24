@@ -3,7 +3,7 @@
 This repo runs PaddleOCR v5 and v6 detection/recognition models exported to ONNX with onnxruntime, using uv for dependency management and execution.
 
 ## Recent updates
-- **2026-06-24**: feat: Support all GitHub release ONNX presets (v5/v6), inference.yml defaults, det/rec mixing, and recognition benchmark table
+- **2026-06-24**: release v1.1.0 — support all GitHub release ONNX presets (v5/v6), inference.yml defaults, det/rec mixing, detection & recognition benchmark tables
 - **2026-05-19**: Include Apache License 2.0
 - **2026-02-10**: feat: Add OCR configuration classes and YAML support
 - **2026-02-03**: feat: Add OCR text detection and recognition modules

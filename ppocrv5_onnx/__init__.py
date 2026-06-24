@@ -11,7 +11,7 @@ from .config import (
     list_rec_presets,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     "OCRPipeline",
     "OCRResult",
