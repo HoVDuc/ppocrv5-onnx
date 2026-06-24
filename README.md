@@ -1,8 +1,9 @@
-# PP-OCRv5 ONNX (uv-based workflow)
+# PP-OCRv5/PP-OCRv6 ONNX (uv-based workflow)
 
-This repo runs PaddleOCR v5 (detection + recognition) exported to ONNX with onnxruntime, using uv for dependency management and execution.
+This repo runs PaddleOCR v5 and v6 detection/recognition models exported to ONNX with onnxruntime, using uv for dependency management and execution.
 
 ## Recent updates
+- **2026-06-24**: feat: Add PP-OCRv6 medium ONNX config presets, v6 dictionary packaging, and independent detector/recognizer mixing
 - **2026-05-19**: Include Apache License 2.0
 - **2026-02-10**: feat: Add OCR configuration classes and YAML support
 - **2026-02-03**: feat: Add OCR text detection and recognition modules
@@ -68,7 +69,9 @@ uv remove onnxruntime && uv add onnxruntime-gpu
 ```
 
 ## Configuration
-Models and the character dictionary are configured in `config.yaml`:
+Models and the character dictionary can be configured with either detailed model paths or preset names.
+
+`config.yaml` is a full PP-OCRv5 mobile example:
 ```yaml
 engine:
   model:
@@ -84,13 +87,49 @@ engine:
     rec:
       path: ./models/PP-OCRv5_mobile_rec/inference.onnx
       input_shape: [3, 32, 320]
-      dict_path: ./dict/ppocrv5_dict.txt
+      dict_path: ./ppocrv5_onnx/data/dict/ppocrv5_dict.txt
 visualize:
-  font_path: fonts/simfang.ttf
+  font_path: ppocrv5_onnx/data/fonts/simfang.ttf
   save_dir: output
   box_thickness: 2
 ```
-`resize_long` is used instead of a fixed `input_shape` for detection to match official PaddleOCR behavior and prevent image distortion. Adjust paths if you relocate models or the dictionary.
+`config_ppocrv6.yaml` is a full PP-OCRv6 medium example:
+```yaml
+engine:
+  model:
+    det:
+      path: ./model/PP-OCRv6_medium_det_onnx/inference.onnx
+      resize_long: 960
+      thresh: 0.2
+      box_thresh: 0.45
+      unclip_ratio: 1.4
+      max_candidates: 3000
+    rec:
+      path: ./model/PP-OCRv6_medium_rec_onnx/inference.onnx
+      input_shape: [3, 48, 320]
+      dict_path: ./ppocrv5_onnx/data/dict/ppocrv6_dict.txt
+```
+
+You can also mix detector and recognizer presets with a compact YAML:
+```yaml
+engine:
+  det_model: ppocrv5_mobile
+  rec_model: ppocrv6_medium
+```
+
+Detailed `engine.model.det` and `engine.model.rec` blocks override preset values when both are present. `resize_long` is used instead of a fixed detector `input_shape` to match official PaddleOCR behavior and prevent image distortion.
+
+Supported preset names (all auto-download from [GitHub Releases](https://github.com/HoVDuc/ppocrv5-onnx/releases)):
+
+| Detector / Recognizer preset | Release asset |
+|---|---|
+| `mobile` / `ppocrv5_mobile` | `PP-OCRv5_mobile_{det,rec}.zip` |
+| `server` / `ppocrv5_server` | `PP-OCRv5_server_{det,rec}.zip` |
+| `ppocrv6_medium` | `PP-OCRv6_medium_{det,rec}_onnx.zip` |
+| `ppocrv6_small` | `PP-OCRv6_small_{det,rec}_onnx.zip` |
+| `ppocrv6_tiny` | `PP-OCRv6_tiny_{det,rec}_onnx.zip` |
+
+Preset defaults are loaded from the `inference.yml` bundled inside each release zip. Recognition dictionaries are materialized once as `character_dict.txt` next to the ONNX model. Packaged `ppocrv5_dict.txt` / `ppocrv6_dict.txt` remain available for manual `from_model_paths()` usage.
 
 ## Usage
 
@@ -101,6 +140,9 @@ from ppocrv5_onnx import OCRPipeline
 
 # Method 1: From pretrained config (auto-downloads models)
 pipeline = OCRPipeline.from_pretrained()
+
+# PP-OCRv6 medium preset
+pipeline = OCRPipeline.from_pretrained("ppocrv6_medium")
 
 # Method 2: From YAML config file
 pipeline = OCRPipeline.from_config("config.yaml")
@@ -121,7 +163,7 @@ config = OCRConfig(
     det=DetectorConfig(path="./models/PP-OCRv5_mobile_det/inference.onnx"),
     rec=RecognizerConfig(
         path="./models/PP-OCRv5_mobile_rec/inference.onnx",
-        dict_path="./dict/ppocrv5_dict.txt"
+        dict_path="./ppocrv5_onnx/data/dict/ppocrv5_dict.txt"
     )
 )
 pipeline = OCRPipeline(config)
@@ -130,8 +172,16 @@ pipeline = OCRPipeline(config)
 pipeline = OCRPipeline.from_model_paths(
     det_model_path="./models/PP-OCRv5_mobile_det/inference.onnx",
     rec_model_path="./models/PP-OCRv5_mobile_rec/inference.onnx",
-    dict_path="./dict/ppocrv5_dict.txt"
+    dict_path="./ppocrv5_onnx/data/dict/ppocrv5_dict.txt"
 )
+
+# Method 5: Mix detector and recognizer presets independently
+pipeline = OCRPipeline.from_pretrained(
+    det_model="ppocrv5_mobile",
+    rec_model="ppocrv6_medium",
+)
+
+pipeline = OCRPipeline.from_mix("ppocrv5_mobile", "ppocrv6_medium")
 
 # With GPU support
 pipeline = OCRPipeline.from_pretrained(
@@ -144,6 +194,14 @@ pipeline = OCRPipeline.from_pretrained(
 pipeline = OCRPipeline.from_config("config.yaml", visualize=True)
 results = pipeline("path/to/image.jpg")
 ```
+
+### PP-OCRv6 Notes
+
+PP-OCRv6 medium recognition uses `input_shape=[3, 48, 320]` and `ppocrv6_dict.txt`. `OCRPipeline.from_model_paths()` detects v6 recognizer paths and defaults to these values when `dict_path` and `input_shape` are not provided.
+
+Model `.onnx` files are not committed to this repository. Use `from_pretrained()` after release assets are available, or point YAML/direct-path config at local ONNX files such as:
+- `model/PP-OCRv6_medium_det_onnx/inference.onnx`
+- `model/PP-OCRv6_medium_rec_onnx/inference.onnx`
 
 ### Using Individual Components
 
@@ -175,6 +233,8 @@ texts = recognizer.recognize(cropped_images)
 ```
 ppocrv5-onnx/
 ├── config.yaml              # Configuration file
+├── config_ppocrv6.yaml      # Local PP-OCRv6 medium path example
+├── config_mix_v5det_v6rec.yaml
 ├── pyproject.toml           # Project dependencies
 ├── ppocrv5_onnx/
 │   ├── __init__.py          # Exports: OCRPipeline, Detector, Recognizer, etc.
@@ -183,6 +243,7 @@ ppocrv5-onnx/
 │   ├── utils.py             # Config utilities
 │   ├── data/
 │   │   ├── dict/ppocrv5_dict.txt
+│   │   ├── dict/ppocrv6_dict.txt
 │   │   └── fonts/simfang.ttf
 │   ├── text_detector/
 │   │   ├── detector.py      # Detector class
@@ -195,9 +256,14 @@ ppocrv5-onnx/
 │   │   └── postprocess.py
 │   └── tools/
 │       └── visualizer.py    # OCRVisualizer
-├── models/
+├── models/                  # Download/cache location for preset models
 │   ├── PP-OCRv5_mobile_det/inference.onnx
-│   └── PP-OCRv5_mobile_rec/inference.onnx
+│   ├── PP-OCRv5_mobile_rec/inference.onnx
+│   ├── PP-OCRv6_medium_det/inference.onnx
+│   └── PP-OCRv6_medium_rec/inference.onnx
+├── model/                   # Optional local dev model paths, gitignored
+│   ├── PP-OCRv6_medium_det_onnx/inference.onnx
+│   └── PP-OCRv6_medium_rec_onnx/inference.onnx
 └── img/
 ```
 
@@ -230,7 +296,9 @@ paddle2onnx --model_dir /path/PP-OCRv5_server_rec_infer \
 
 ## Troubleshooting
 - Missing dependency? `uv add <name>` and re-run `uv sync`.
-- Path errors for models/dict? Verify the paths in `config.yaml` are correct relative to the repo root.
+- Path errors for models/dict? Verify the paths in `config.yaml`, `config_ppocrv6.yaml`, or your custom config are correct relative to the repo root.
+- `IndexError` during recognition decode usually means the recognizer dictionary does not match the recognizer ONNX model. Use `ppocrv6_dict.txt` with PP-OCRv6 medium recognition.
+- `from_pretrained("ppocrv6_medium")` requires PP-OCRv6 release zip assets to be available. Until those assets are published, use `config_ppocrv6.yaml` or `from_model_paths()` with local ONNX files.
 - OpenCV display errors on servers? Use `opencv-python-headless`.
 - GPU not used? Ensure CUDA drivers/runtime are installed and use GPU providers:
   ```python

@@ -1,0 +1,5 @@
+engine:
+  det_model: ppocrv5_mobile
+  rec_model: ppocrv6_medium
+visualize:
+  save_dir: output

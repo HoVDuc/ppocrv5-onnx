@@ -25,5 +25,8 @@ where = ["."]
 include = ["ppocrv5_onnx", "ppocrv5_onnx.*"]
 
 [tool.setuptools.package-data]
-ppocrv5_onnx = ["data/dict/ppocrv5_dict.txt", "data/fonts/simfang.ttf"]
-
+ppocrv5_onnx = [
+  "data/dict/ppocrv5_dict.txt",
+  "data/dict/ppocrv6_dict.txt",
+  "data/fonts/simfang.ttf",
+]

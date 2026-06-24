@@ -1,0 +1,17 @@
+engine:
+  model:
+    det:
+      path: ./model/PP-OCRv6_medium_det_onnx/inference.onnx
+      resize_long: 960
+      thresh: 0.2
+      box_thresh: 0.45
+      unclip_ratio: 1.4
+      max_candidates: 3000
+    rec:
+      path: ./model/PP-OCRv6_medium_rec_onnx/inference.onnx
+      input_shape: [3, 48, 320]
+      dict_path: ./ppocrv5_onnx/data/dict/ppocrv6_dict.txt
+visualize:
+  font_path: ppocrv5_onnx/data/fonts/simfang.ttf
+  save_dir: output
+  box_thickness: 2

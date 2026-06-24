@@ -10,3 +10,6 @@ wheels/
 .vscode/
 .venv
 /output/
+
+model/
+ppocrv5_onnx/models/
