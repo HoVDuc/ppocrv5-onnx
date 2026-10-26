@@ -229,7 +229,8 @@ pipeline = OCRPipeline.from_pretrained(
     sess_options=sess_options,
 )
 
-# Enable visualization (saves result to output folder)
+# Enable visualization (saves output/<image name>_ocr_result.png; in-memory
+# inputs are saved as ocr_result.png, ocr_result_1.png, ... without overwriting)
 pipeline = OCRPipeline.from_config("config.yaml", visualize=True)
 results = pipeline("path/to/image.jpg")
 ```

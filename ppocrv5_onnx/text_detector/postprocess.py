@@ -1,8 +1,6 @@
 from typing import Union
 import cv2
-from matplotlib import pyplot as plt
 import numpy as np
-from shapely.geometry import Polygon
 import pyclipper
 import math
 from loguru import logger
@@ -31,6 +29,8 @@ class DBPostProcess:
         self.unclip_ratio = unclip_ratio
         self.min_size = 3
         self.score_mode = score_mode
+        if box_type != "quad":
+            raise ValueError(f"Only box_type='quad' is supported, got: {box_type!r}")
         self.box_type = box_type
         assert score_mode in [
             "slow",
@@ -89,10 +89,11 @@ class DBPostProcess:
                 box[i, 0] = max(0, min(round(box[i, 0] * width_scale), dest_width))
                 box[i, 1] = max(0, min(round(box[i, 1] * height_scale), dest_height))
 
-            boxes.append(box.astype(np.int16))
+            # int32: int16 overflows for images with a side longer than 32767 px
+            boxes.append(box.astype(np.int32))
             scores.append(score)
 
-        return np.array(boxes, dtype=np.int16), scores
+        return np.array(boxes, dtype=np.int32), scores
 
     def unclip(self, box, unclip_ratio):
         """unclip"""
@@ -158,9 +159,9 @@ class DBPostProcess:
             box, score = self.process(
                 pred,
                 img_shape,
-                thresh or self.thresh,
-                box_thresh or self.box_thresh,
-                unclip_ratio or self.unclip_ratio,
+                self.thresh if thresh is None else thresh,
+                self.box_thresh if box_thresh is None else box_thresh,
+                self.unclip_ratio if unclip_ratio is None else unclip_ratio,
             )
             boxes.append(box)
             scores.append(score)
@@ -186,18 +187,6 @@ class DBPostProcess:
         else:
             mask = segmentation
         
-        if self.box_type == "poly":
-            boxes, scores = self.polygons_from_bitmap(
-                pred, mask, src_w, src_h, box_thresh, unclip_ratio
-            )
-            
-        elif self.box_type == "quad":
-            boxes, scores = self.boxes_from_bitmap(
-                pred, mask, src_w, src_h, box_thresh, unclip_ratio
-            )
-            # Draw the polygons on the mask for visualization
-            for box in boxes:
-                cv2.polylines(pred, [box.astype(np.int32)], isClosed=True, color=1, thickness=1)
-        else:
-            raise ValueError("box_type can only be one of ['quad', 'poly']")
-        return boxes, scores
+        return self.boxes_from_bitmap(
+            pred, mask, src_w, src_h, box_thresh, unclip_ratio
+        )

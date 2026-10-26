@@ -233,11 +233,12 @@ class OCRPipeline:
             raise ValueError(f"rec_batch_size must be >= 1, got {rec_batch_size}")
 
         # 1. Preprocess Input Image (models expect BGR, like official PaddleOCR)
+        source_path = None
         if isinstance(image, (str, Path)):
-            image_path = image
-            image = cv2.imread(str(image_path))
+            source_path = Path(image)
+            image = cv2.imread(str(source_path))
             if image is None:
-                raise ValueError(f"Could not read image from path: {image_path}")
+                raise ValueError(f"Could not read image from path: {source_path}")
         elif isinstance(image, Image.Image):
             image = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
         image = self._ensure_3_channels(image)
@@ -285,9 +286,23 @@ class OCRPipeline:
 
             save_dir = Path(self.config.visualize.save_dir)
             save_dir.mkdir(parents=True, exist_ok=True)
-            vis_image.save(save_dir / "ocr_result.png")
+            save_path = self._visualization_path(save_dir, source_path)
+            vis_image.save(save_path)
+            logger.info(f"Visualization saved to {save_path}")
 
         return results
+
+    @staticmethod
+    def _visualization_path(save_dir: Path, source_path: Optional[Path]) -> Path:
+        """Name the output after the input file, or number it so in-memory inputs never overwrite each other."""
+        if source_path is not None:
+            return save_dir / f"{source_path.stem}_ocr_result.png"
+        save_path = save_dir / "ocr_result.png"
+        index = 1
+        while save_path.exists():
+            save_path = save_dir / f"ocr_result_{index}.png"
+            index += 1
+        return save_path
 
     @staticmethod
     def _ensure_3_channels(image: np.ndarray) -> np.ndarray:

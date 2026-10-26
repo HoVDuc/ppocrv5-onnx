@@ -10,9 +10,9 @@ dependencies = [
   "opencv-python",
   "numpy",
   "omegaconf",
+  "pyyaml",
+  "pillow",
   "loguru",
-  "matplotlib",
-  "shapely",
   "pyclipper",
 ]
 
