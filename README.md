@@ -3,6 +3,7 @@
 This repo runs PaddleOCR v5 and v6 detection/recognition models exported to ONNX with onnxruntime, using uv for dependency management and execution.
 
 ## Recent updates
+- **Unreleased**: bug fixes — numpy inputs are BGR (same as PaddleOCR) so file paths and `cv2.imread` arrays give identical results, grayscale/RGBA inputs are supported, memory-safe CUDA defaults and `sess_options` (#5), atomic model downloads, partial YAML overrides merge onto presets, unique visualization file names, working `OCRResult.xyxy()`/`to_dict()`; `matplotlib`/`shapely` are no longer dependencies
 - **2026-06-24**: release v1.1.0 — support all GitHub release ONNX presets (v5/v6), inference.yml defaults, det/rec mixing, detection & recognition benchmark tables
 - **2026-05-19**: Include Apache License 2.0
 - **2026-02-10**: feat: Add OCR configuration classes and YAML support
@@ -40,7 +41,7 @@ uv sync
 ### Option 1: Install from source (recommended for development)
 ```sh
 # Clone the repository
-git clone https://github.com/your-username/ppocrv5-onnx.git
+git clone https://github.com/HoVDuc/ppocrv5-onnx.git
 cd ppocrv5-onnx
 
 # Install in development mode
@@ -49,7 +50,7 @@ pip install -e .
 
 ### Option 2: Install directly from GitHub
 ```sh
-pip install git+https://github.com/your-username/ppocrv5-onnx.git
+pip install git+https://github.com/HoVDuc/ppocrv5-onnx.git
 ```
 
 ### Option 3: Using uv (if already in project directory)
@@ -130,6 +131,8 @@ Supported preset names (all auto-download from [GitHub Releases](https://github.
 | `ppocrv6_tiny` | `PP-OCRv6_tiny_{det,rec}_onnx.zip` |
 
 Preset defaults are loaded from the `inference.yml` bundled inside each release zip. Recognition dictionaries are materialized once as `character_dict.txt` next to the ONNX model. Packaged `ppocrv5_dict.txt` / `ppocrv6_dict.txt` remain available for manual `from_model_paths()` usage.
+
+Downloaded presets are cached in `~/.cache/ppocrv5_onnx/models/<model dir>/` (or `$XDG_CACHE_HOME/ppocrv5_onnx/models/` when `XDG_CACHE_HOME` is set). Downloads are extracted in a temporary directory and moved into place only when complete, so an interrupted download is simply retried on the next run.
 
 ## Detection benchmark (supported models)
 
@@ -251,9 +254,9 @@ from ppocrv5_onnx.utils import load_config
 
 cfg = load_config('config.yaml')
 
-# Detection only
+# Detection only (image: HxWx3 BGR numpy array, e.g. from cv2.imread)
 detector = Detector(cfg.engine.model.det)
-boxes = detector.detect(image)
+boxes, scores = detector.detect(image)  # boxes[0]: (N, 4, 2) int32 quads
 
 # Recognition only  
 recognizer = Recognizer(cfg.engine.model.rec)
@@ -279,8 +282,10 @@ ppocrv5-onnx/
 ├── ppocrv5_onnx/
 │   ├── __init__.py          # Exports: OCRPipeline, Detector, Recognizer, etc.
 │   ├── pipeline.py          # Main OCRPipeline class
+│   ├── config.py            # OCRConfig, presets, model download
+│   ├── inference_config.py  # Defaults read from each model's inference.yml
 │   ├── schema.py            # OCRResult dataclass
-│   ├── utils.py             # Config utilities
+│   ├── utils.py             # Config loading, ONNX Runtime session/provider helpers
 │   ├── data/
 │   │   ├── dict/ppocrv5_dict.txt
 │   │   ├── dict/ppocrv6_dict.txt
@@ -296,16 +301,14 @@ ppocrv5-onnx/
 │   │   └── postprocess.py
 │   └── tools/
 │       └── visualizer.py    # OCRVisualizer
-├── models/                  # Download/cache location for preset models
-│   ├── PP-OCRv5_mobile_det/inference.onnx
-│   ├── PP-OCRv5_mobile_rec/inference.onnx
-│   ├── PP-OCRv6_medium_det_onnx/inference.onnx
-│   └── PP-OCRv6_medium_rec_onnx/inference.onnx
+├── tests/                   # pytest suite
 ├── model/                   # Optional local dev model paths, gitignored
 │   ├── PP-OCRv6_medium_det_onnx/inference.onnx
 │   └── PP-OCRv6_medium_rec_onnx/inference.onnx
 └── img/
 ```
+
+Preset models are not stored in the repository; they are downloaded to `~/.cache/ppocrv5_onnx/models/` (see [Configuration](#configuration)).
 
 ## Model export (Paddle2ONNX)
 Clone the PaddleOCR repo if you haven't already:
@@ -340,6 +343,9 @@ paddle2onnx --model_dir /path/PP-OCRv5_server_rec_infer \
 - `IndexError` during recognition decode usually means the recognizer dictionary does not match the recognizer ONNX model. Use `ppocrv6_dict.txt` with PP-OCRv6 medium recognition.
 - `from_pretrained("ppocrv6_medium")` downloads PP-OCRv6 assets from [GitHub Releases](https://github.com/HoVDuc/ppocrv5-onnx/releases). For offline use, place ONNX files locally and use `config_ppocrv6.yaml` or `from_model_paths()`.
 - OpenCV display errors on servers? Use `opencv-python-headless`.
+- `InvalidProtobuf` / model load errors after an interrupted download from an older version? Delete that model's folder under `~/.cache/ppocrv5_onnx/models/` and run again to re-download it.
+- GPU memory grows until OOM with many images of different sizes? Pass providers as plain `"CUDAExecutionProvider"` strings to get the memory-safe defaults, or pass `("CUDAExecutionProvider", {...})` with your own options such as `gpu_mem_limit` (see [Advanced Usage](#advanced-usage)).
+- Visualizations are written to `visualize.save_dir` (default `output/`) as `<image name>_ocr_result.png`.
 - GPU not used? Ensure CUDA drivers/runtime are installed and use GPU providers:
   ```python
   pipeline = OCRPipeline.from_config(
