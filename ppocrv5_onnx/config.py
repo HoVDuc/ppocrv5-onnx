@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 import os
-import shutil
 import tempfile
 import urllib.request
 import zipfile
@@ -342,12 +341,25 @@ def _download_if_missing(preset: ModelPreset) -> None:
                 f"{preset.model_dir}/inference.onnx and inference.yml"
             )
 
-        if _is_complete(preset):
-            return  # another process finished the same download first
-        if preset.model_dir_path.exists():
-            shutil.rmtree(preset.model_dir_path)  # incomplete leftover
+        # Rename first instead of check-then-delete: the rename fails when another
+        # process has already placed a model directory, so a complete copy that
+        # appears at any moment is never removed.
         try:
-            os.replace(extracted, preset.model_dir_path)
+            os.rename(extracted, preset.model_dir_path)
+            return
+        except OSError:
+            if _is_complete(preset):
+                return  # another process finished the same download first
+
+        # An incomplete leftover (e.g. an interrupted older download) is in the
+        # way: move it aside in one rename (cleaned up with the staging dir),
+        # then retry once.
+        try:
+            os.rename(preset.model_dir_path, staging_dir / "stale")
+        except FileNotFoundError:
+            pass  # another process already moved it
+        try:
+            os.rename(extracted, preset.model_dir_path)
         except OSError:
             if not _is_complete(preset):
                 raise

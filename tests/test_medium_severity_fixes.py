@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -225,4 +226,39 @@ def test_download_keeps_copy_finished_by_another_process(
     config_module._download_if_missing(PRESET)
 
     assert PRESET.model_path.read_bytes() == b"other"
+    assert sorted(p.name for p in models_dir.iterdir()) == ["Fake_det"]
+
+
+def test_download_never_deletes_a_model_another_process_just_completed(
+    models_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another process may place a complete model right after any completeness check."""
+    _serve_zip(monkeypatch, tmp_path, VALID_MEMBERS)
+    real_is_complete = config_module._is_complete
+    calls = {"n": 0}
+
+    def is_complete_then_other_process_finishes(preset: ModelPreset) -> bool:
+        result = real_is_complete(preset)
+        calls["n"] += 1
+        if calls["n"] == 2 and not PRESET.model_dir_path.exists():
+            PRESET.model_dir_path.mkdir(parents=True)
+            PRESET.model_path.write_bytes(b"other")
+            (PRESET.model_dir_path / "inference.yml").write_text("Global: {}\n")
+        return result
+
+    deleted_complete: list[Path] = []
+    real_rmtree = shutil.rmtree
+
+    def recording_rmtree(path, *args, **kwargs):
+        if Path(path) == PRESET.model_dir_path and real_is_complete(PRESET):
+            deleted_complete.append(Path(path))
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(config_module, "_is_complete", is_complete_then_other_process_finishes)
+    monkeypatch.setattr(shutil, "rmtree", recording_rmtree)
+
+    config_module._download_if_missing(PRESET)
+
+    assert deleted_complete == []
+    assert real_is_complete(PRESET)
     assert sorted(p.name for p in models_dir.iterdir()) == ["Fake_det"]
