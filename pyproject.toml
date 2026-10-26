@@ -10,15 +10,18 @@ dependencies = [
   "opencv-python",
   "numpy",
   "omegaconf",
+  "pyyaml",
+  "pillow",
   "loguru",
-  "matplotlib",
-  "shapely",
   "pyclipper",
 ]
 
 [build-system]
-requires = ["setuptools>=62"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=64"]
+# setuptools with editable installs defaulting to editable_mode=compat so that
+# editors can resolve the package (see _build_backend/backend.py).
+build-backend = "backend"
+backend-path = ["_build_backend"]
 
 [tool.setuptools.packages.find]
 where = ["."]

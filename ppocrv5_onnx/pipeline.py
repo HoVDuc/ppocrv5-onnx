@@ -3,6 +3,7 @@ from __future__ import annotations
 import cv2
 import time
 import numpy as np
+import onnxruntime as ort
 from PIL import Image
 from loguru import logger
 from typing import List, Union, Optional
@@ -47,6 +48,7 @@ class OCRPipeline:
         det_providers: Optional[List[str]] = None,
         rec_providers: Optional[List[str]] = None,
         visualize: bool = False,
+        sess_options: Optional[ort.SessionOptions] = None,
     ):
         """
         Initialize OCR Pipeline with configuration.
@@ -56,10 +58,11 @@ class OCRPipeline:
             det_providers: ONNX Runtime providers for detection.
             rec_providers: ONNX Runtime providers for recognition.
             visualize: Enable visualization of results.
+            sess_options: Optional ONNX Runtime SessionOptions for both models.
         """
         self.config = config
-        self.detector = Detector(config.det, providers=det_providers)
-        self.recognizer = Recognizer(config.rec, providers=rec_providers)
+        self.detector = Detector(config.det, providers=det_providers, sess_options=sess_options)
+        self.recognizer = Recognizer(config.rec, providers=rec_providers, sess_options=sess_options)
 
         if visualize:
             self.visualizer = OCRVisualizer(
@@ -79,6 +82,7 @@ class OCRPipeline:
         det_providers: Optional[List[str]] = None,
         rec_providers: Optional[List[str]] = None,
         visualize: bool = False,
+        sess_options: Optional[ort.SessionOptions] = None,
     ) -> "OCRPipeline":
         """
         Create pipeline from pretrained configuration.
@@ -87,10 +91,13 @@ class OCRPipeline:
             model_name: Synchronized model preset. Supports legacy
                 ``mobile``/``server`` aliases and explicit preset names.
             det_model: Optional detector preset for mixed-model pipelines.
+                Falls back to ``model_name`` when omitted.
             rec_model: Optional recognizer preset for mixed-model pipelines.
+                Falls back to ``model_name`` when omitted.
             det_providers: ONNX Runtime providers for detection.
             rec_providers: ONNX Runtime providers for recognition.
             visualize: Enable visualization.
+            sess_options: Optional ONNX Runtime SessionOptions for both models.
 
         Returns:
             OCRPipeline instance.
@@ -99,11 +106,11 @@ class OCRPipeline:
             base_model = model_name or "mobile"
             config = OCRConfig.from_mix(
                 det_model=det_model or base_model,
-                rec_model=rec_model or det_model or base_model,
+                rec_model=rec_model or base_model,
             )
         else:
             config = OCRConfig.from_pretrained(model_name or "mobile")
-        return cls(config, det_providers, rec_providers, visualize)
+        return cls(config, det_providers, rec_providers, visualize, sess_options)
 
     @classmethod
     def from_mix(
@@ -114,6 +121,7 @@ class OCRPipeline:
         det_providers: Optional[List[str]] = None,
         rec_providers: Optional[List[str]] = None,
         visualize: bool = False,
+        sess_options: Optional[ort.SessionOptions] = None,
     ) -> "OCRPipeline":
         """
         Create pipeline from independently selected detector and recognizer presets.
@@ -124,12 +132,13 @@ class OCRPipeline:
             det_providers: ONNX Runtime providers for detection.
             rec_providers: ONNX Runtime providers for recognition.
             visualize: Enable visualization.
+            sess_options: Optional ONNX Runtime SessionOptions for both models.
 
         Returns:
             OCRPipeline instance.
         """
         config = OCRConfig.from_mix(det_model=det_model, rec_model=rec_model)
-        return cls(config, det_providers, rec_providers, visualize)
+        return cls(config, det_providers, rec_providers, visualize, sess_options)
 
     @classmethod
     def from_config(
@@ -138,6 +147,7 @@ class OCRPipeline:
         det_providers: Optional[List[str]] = None,
         rec_providers: Optional[List[str]] = None,
         visualize: bool = False,
+        sess_options: Optional[ort.SessionOptions] = None,
     ) -> "OCRPipeline":
         """
         Create pipeline from YAML config file.
@@ -147,12 +157,13 @@ class OCRPipeline:
             det_providers: ONNX Runtime providers for detection.
             rec_providers: ONNX Runtime providers for recognition.
             visualize: Enable visualization.
+            sess_options: Optional ONNX Runtime SessionOptions for both models.
 
         Returns:
             OCRPipeline instance.
         """
         config = OCRConfig.from_yaml(str(config_path))
-        return cls(config, det_providers, rec_providers, visualize)
+        return cls(config, det_providers, rec_providers, visualize, sess_options)
 
     @classmethod
     def from_model_paths(
@@ -164,6 +175,7 @@ class OCRPipeline:
         det_providers: Optional[List[str]] = None,
         rec_providers: Optional[List[str]] = None,
         visualize: bool = False,
+        sess_options: Optional[ort.SessionOptions] = None,
         **kwargs,
     ) -> "OCRPipeline":
         """
@@ -177,6 +189,7 @@ class OCRPipeline:
             det_providers: ONNX Runtime providers for detection.
             rec_providers: ONNX Runtime providers for recognition.
             visualize: Enable visualization.
+            sess_options: Optional ONNX Runtime SessionOptions for both models.
             **kwargs: Additional config parameters.
 
         Returns:
@@ -200,16 +213,17 @@ class OCRPipeline:
         )
         config = OCRConfig(det=det_config, rec=rec_config)
 
-        return cls(config, det_providers, rec_providers, visualize)
+        return cls(config, det_providers, rec_providers, visualize, sess_options)
 
     def __call__(
-        self, image: Union[str, np.ndarray, Image.Image], rec_batch_size: int = 8
+        self, image: Union[str, Path, np.ndarray, Image.Image], rec_batch_size: int = 8
     ) -> List[OCRResult]:
         """
         Run OCR on input image.
 
         Args:
-            image: Input image (path, numpy array, or PIL Image).
+            image: Input image: a file path, a numpy array in BGR order
+                (as returned by ``cv2.imread``, same as PaddleOCR), or a PIL Image.
             rec_batch_size: Batch size for recognition.
 
         Returns:
@@ -218,14 +232,16 @@ class OCRPipeline:
         if rec_batch_size < 1:
             raise ValueError(f"rec_batch_size must be >= 1, got {rec_batch_size}")
 
-        # 1. Preprocess Input Image
-        if isinstance(image, str):
-            image = cv2.imread(image)
+        # 1. Preprocess Input Image (models expect BGR, like official PaddleOCR)
+        source_path = None
+        if isinstance(image, (str, Path)):
+            source_path = Path(image)
+            image = cv2.imread(str(source_path))
             if image is None:
-                raise ValueError(f"Could not read image from path: {image}")
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                raise ValueError(f"Could not read image from path: {source_path}")
         elif isinstance(image, Image.Image):
-            image = np.array(image)
+            image = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
+        image = self._ensure_3_channels(image)
 
         # 2. Detect text boxes
         det_time_start = time.time()
@@ -270,6 +286,35 @@ class OCRPipeline:
 
             save_dir = Path(self.config.visualize.save_dir)
             save_dir.mkdir(parents=True, exist_ok=True)
-            vis_image.save(save_dir / "ocr_result.png")
+            save_path = self._visualization_path(save_dir, source_path)
+            vis_image.save(save_path)
+            logger.info(f"Visualization saved to {save_path}")
 
         return results
+
+    @staticmethod
+    def _visualization_path(save_dir: Path, source_path: Optional[Path]) -> Path:
+        """Name the output after the input file, or number it so in-memory inputs never overwrite each other."""
+        if source_path is not None:
+            return save_dir / f"{source_path.stem}_ocr_result.png"
+        save_path = save_dir / "ocr_result.png"
+        index = 1
+        while save_path.exists():
+            save_path = save_dir / f"ocr_result_{index}.png"
+            index += 1
+        return save_path
+
+    @staticmethod
+    def _ensure_3_channels(image: np.ndarray) -> np.ndarray:
+        """Convert grayscale or 4-channel arrays to the 3-channel layout the models expect."""
+        if image.ndim == 3 and image.shape[2] == 1:
+            image = image[:, :, 0]
+        if image.ndim == 2:
+            return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        if image.ndim == 3 and image.shape[2] == 4:
+            return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError(
+                f"Unsupported image shape {image.shape}; expected HxW, HxWx1, HxWx3 or HxWx4"
+            )
+        return image

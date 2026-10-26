@@ -93,7 +93,12 @@ def test_from_model_paths_detects_v6_rec_defaults(
     class FakeComponent:
         """Minimal component stub that avoids ONNX Runtime session creation."""
 
-        def __init__(self, config: object, providers: list[str] | None = None) -> None:
+        def __init__(
+            self,
+            config: object,
+            providers: list[str] | None = None,
+            sess_options: object | None = None,
+        ) -> None:
             self.config = config
             self.providers = providers
 

@@ -1,0 +1,2 @@
+# The in-tree build backend must ship in the sdist so it can be built from it.
+include _build_backend/backend.py
