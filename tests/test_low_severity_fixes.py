@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -88,22 +89,41 @@ def _visualizing_pipeline(save_dir: Path) -> OCRPipeline:
     return pipeline
 
 
-def test_visualization_does_not_overwrite_previous_results(tmp_path: Path) -> None:
+def _expected_name(path: Path) -> str:
+    path_hash = hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()[:8]
+    return f"{path.stem}_{path_hash}_ocr_result.png"
+
+
+def test_visualization_does_not_overwrite_previous_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     save_dir = tmp_path / "out"
     first, second = tmp_path / "first.png", tmp_path / "second.jpg"
-    for path in (first, second):
+    # Same file name in two directories must not collide.
+    page_a, page_b = tmp_path / "set1" / "page.png", tmp_path / "set2" / "page.png"
+    for path in (first, second, page_a, page_b):
+        path.parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(path), np.full((8, 8, 3), 255, np.uint8))
     pipeline = _visualizing_pipeline(save_dir)
 
     pipeline(str(first))
     pipeline(second)
+    pipeline(page_a)
+    pipeline(page_b)
     pipeline(np.zeros((8, 8, 3), np.uint8))
     pipeline(np.zeros((8, 8, 3), np.uint8))
     pipeline(str(first))  # re-running the same file replaces its own result
+    monkeypatch.chdir(tmp_path)
+    pipeline("first.png")  # a relative path to the same file maps to the same output
 
-    assert sorted(p.name for p in save_dir.iterdir()) == [
-        "first_ocr_result.png",
-        "ocr_result.png",
-        "ocr_result_1.png",
-        "second_ocr_result.png",
-    ]
+    assert sorted(p.name for p in save_dir.iterdir()) == sorted(
+        [
+            _expected_name(first),
+            _expected_name(second),
+            _expected_name(page_a),
+            _expected_name(page_b),
+            "ocr_result.png",
+            "ocr_result_1.png",
+        ]
+    )
+    assert _expected_name(page_a) != _expected_name(page_b)

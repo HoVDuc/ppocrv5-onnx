@@ -234,7 +234,7 @@ pipeline = OCRPipeline.from_pretrained(
     sess_options=sess_options,
 )
 
-# Enable visualization (saves output/<image name>_ocr_result.png; in-memory
+# Enable visualization (saves output/<image name>_<path hash>_ocr_result.png; in-memory
 # inputs are saved as ocr_result.png, ocr_result_1.png, ... without overwriting)
 pipeline = OCRPipeline.from_config("config.yaml", visualize=True)
 results = pipeline("path/to/image.jpg")
@@ -348,7 +348,7 @@ paddle2onnx --model_dir /path/PP-OCRv5_server_rec_infer \
 - OpenCV display errors on servers? Use `opencv-python-headless`.
 - `InvalidProtobuf` / model load errors after an interrupted download from an older version? Delete that model's folder under `~/.cache/ppocrv5_onnx/models/` and run again to re-download it.
 - GPU memory grows until OOM with many images of different sizes? Pass providers as plain `"CUDAExecutionProvider"` strings to get the memory-safe defaults, or pass `("CUDAExecutionProvider", {...})` with your own options such as `gpu_mem_limit` (see [Advanced Usage](#advanced-usage)).
-- Visualizations are written to `visualize.save_dir` (default `output/`) as `<image name>_ocr_result.png`.
+- Visualizations are written to `visualize.save_dir` (default `output/`) as `<image name>_<8-char hash of its absolute path>_ocr_result.png`, so same-named images from different folders do not overwrite each other.
 - GPU not used? Ensure CUDA drivers/runtime are installed and use GPU providers:
   ```python
   pipeline = OCRPipeline.from_config(
