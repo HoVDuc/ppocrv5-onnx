@@ -134,7 +134,7 @@ Supported preset names (all auto-download from [GitHub Releases](https://github.
 
 Preset defaults are loaded from the `inference.yml` bundled inside each release zip. Recognition dictionaries are materialized once as `character_dict.txt` next to the ONNX model. Packaged `ppocrv5_dict.txt` / `ppocrv6_dict.txt` remain available for manual `from_model_paths()` usage.
 
-Downloaded presets are cached in `~/.cache/ppocrv5_onnx/models/<model dir>/` (or `$XDG_CACHE_HOME/ppocrv5_onnx/models/` when `XDG_CACHE_HOME` is set). Downloads are extracted in a temporary directory and moved into place only when complete, so an interrupted download is simply retried on the next run.
+Downloaded presets are cached in `~/.cache/ppocrv5_onnx/models/<model dir>/` (or `$XDG_CACHE_HOME/ppocrv5_onnx/models/` when `XDG_CACHE_HOME` is set). Downloads are extracted in a temporary directory and moved into place only when complete, so an interrupted download is simply retried on the next run. A per-model lock file (`.<model dir>.lock`) makes concurrent processes download each model only once; the others wait and reuse it.
 
 ## Detection benchmark (supported models)
 
