@@ -45,8 +45,10 @@ git clone https://github.com/HoVDuc/ppocrv5-onnx.git
 cd ppocrv5-onnx
 
 # Install in development mode
-pip install -e .
+pip install -e . --config-settings editable_mode=compat
 ```
+
+> **Why `editable_mode=compat`?** A plain `pip install -e .` (setuptools ≥ 64) installs an import hook instead of a path in `site-packages/__editable__.ppocrv5_onnx-*.pth`. Python can import the package, but static analyzers used by editors (Pylance/Pyright, Jedi) cannot follow the hook, so there is no autocompletion or go-to-definition. `compat` mode writes the repository path into the `.pth` file, which those tools understand. If you already installed without it, reinstall with the command above.
 
 ### Option 2: Install directly from GitHub
 ```sh
@@ -56,7 +58,7 @@ pip install git+https://github.com/HoVDuc/ppocrv5-onnx.git
 ### Option 3: Using uv (if already in project directory)
 ```sh
 uv sync
-uv pip install -e .
+uv pip install -e . -C editable_mode=compat
 ```
 
 If you are on a headless server and encounter display issues, you can swap OpenCV with:
