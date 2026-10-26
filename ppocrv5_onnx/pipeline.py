@@ -87,7 +87,9 @@ class OCRPipeline:
             model_name: Synchronized model preset. Supports legacy
                 ``mobile``/``server`` aliases and explicit preset names.
             det_model: Optional detector preset for mixed-model pipelines.
+                Falls back to ``model_name`` when omitted.
             rec_model: Optional recognizer preset for mixed-model pipelines.
+                Falls back to ``model_name`` when omitted.
             det_providers: ONNX Runtime providers for detection.
             rec_providers: ONNX Runtime providers for recognition.
             visualize: Enable visualization.
@@ -99,7 +101,7 @@ class OCRPipeline:
             base_model = model_name or "mobile"
             config = OCRConfig.from_mix(
                 det_model=det_model or base_model,
-                rec_model=rec_model or det_model or base_model,
+                rec_model=rec_model or base_model,
             )
         else:
             config = OCRConfig.from_pretrained(model_name or "mobile")
@@ -225,7 +227,8 @@ class OCRPipeline:
                 raise ValueError(f"Could not read image from path: {image}")
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         elif isinstance(image, Image.Image):
-            image = np.array(image)
+            image = np.array(image.convert("RGB"))
+        image = self._ensure_3_channels(image)
 
         # 2. Detect text boxes
         det_time_start = time.time()
@@ -273,3 +276,18 @@ class OCRPipeline:
             vis_image.save(save_dir / "ocr_result.png")
 
         return results
+
+    @staticmethod
+    def _ensure_3_channels(image: np.ndarray) -> np.ndarray:
+        """Convert grayscale or 4-channel arrays to the 3-channel layout the models expect."""
+        if image.ndim == 3 and image.shape[2] == 1:
+            image = image[:, :, 0]
+        if image.ndim == 2:
+            return cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+        if image.ndim == 3 and image.shape[2] == 4:
+            return cv2.cvtColor(image, cv2.COLOR_RGBA2RGB)
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError(
+                f"Unsupported image shape {image.shape}; expected HxW, HxWx1, HxWx3 or HxWx4"
+            )
+        return image

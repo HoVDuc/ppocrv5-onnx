@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 import os
 import urllib.request
 import zipfile
@@ -166,16 +166,14 @@ class OCRConfig:
         )
         rec_model = str(engine.get("rec_model", det_model))
 
-        det_config = (
-            DetectorConfig(**det_overrides)
-            if det_overrides
-            else _resolve_det_preset(det_model)
+        det_config = _apply_overrides(
+            DetectorConfig, det_overrides, lambda: _resolve_det_preset(det_model)
         )
         if rec_overrides:
             _warn_on_dict_override(rec_model, rec_overrides)
-            rec_config = RecognizerConfig(**rec_overrides)
-        else:
-            rec_config = _resolve_rec_preset(rec_model)
+        rec_config = _apply_overrides(
+            RecognizerConfig, rec_overrides, lambda: _resolve_rec_preset(rec_model)
+        )
 
         vis_config = VisualizeConfig(**config_dict.get("visualize", {}))
         return cls(det=det_config, rec=rec_config, visualize=vis_config)
@@ -217,6 +215,9 @@ class OCRConfig:
         """Save this configuration to a YAML file."""
         with Path(yaml_path).open("w", encoding="utf-8") as handle:
             yaml.dump(self.to_dict(), handle, default_flow_style=False)
+
+
+_ComponentConfig = TypeVar("_ComponentConfig", DetectorConfig, RecognizerConfig)
 
 
 def list_det_presets() -> list[str]:
@@ -264,6 +265,19 @@ def _resolve_rec_preset(name: str) -> RecognizerConfig:
         onnx_path=preset.model_path,
         packaged_dict_paths=_packaged_dict_paths(),
     )
+
+
+def _apply_overrides(
+    config_cls: type[_ComponentConfig],
+    overrides: dict[str, Any] | None,
+    resolve_preset: Callable[[], _ComponentConfig],
+) -> _ComponentConfig:
+    """Merge YAML overrides onto a preset, skipping the preset when a path is given."""
+    if not overrides:
+        return resolve_preset()
+    if "path" in overrides:
+        return config_cls(**overrides)
+    return replace(resolve_preset(), **overrides)
 
 
 def _get_preset(

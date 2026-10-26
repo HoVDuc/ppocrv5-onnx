@@ -15,11 +15,8 @@ class OCRResult:
         Returns:
             Tuple of (x_min, y_min, x_max, y_max)
         """
-        if isinstance(self.point, list):
-            point = np.array(self.point)
-        else:
-            point = self.points
-            
+        point = np.asarray(self.point).reshape(-1, 2)
+
         x_coords = point[:, 0]
         y_coords = point[:, 1]
         
@@ -34,5 +31,5 @@ class OCRResult:
         return {
             "text": self.text,
             "score": self.score,
-            "box": self.box.tolist() if isinstance(self.box, np.ndarray) else self.box
+            "box": self.point.tolist() if isinstance(self.point, np.ndarray) else self.point
         }

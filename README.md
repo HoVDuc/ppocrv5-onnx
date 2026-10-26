@@ -117,7 +117,7 @@ engine:
   rec_model: ppocrv6_medium
 ```
 
-Detailed `engine.model.det` and `engine.model.rec` blocks override preset values when both are present. `resize_long` is used instead of a fixed detector `input_shape` to match official PaddleOCR behavior and prevent image distortion.
+Detailed `engine.model.det` and `engine.model.rec` blocks override preset values when both are present. A block without `path` is merged onto the selected preset (e.g. only `thresh: 0.2`); a block with `path` is used as-is and does not download the preset. `resize_long` is used instead of a fixed detector `input_shape` to match official PaddleOCR behavior and prevent image distortion.
 
 Supported preset names (all auto-download from [GitHub Releases](https://github.com/HoVDuc/ppocrv5-onnx/releases)):
 
