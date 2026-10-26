@@ -45,10 +45,10 @@ git clone https://github.com/HoVDuc/ppocrv5-onnx.git
 cd ppocrv5-onnx
 
 # Install in development mode
-pip install -e . --config-settings editable_mode=compat
+pip install -e .
 ```
 
-> **Why `editable_mode=compat`?** A plain `pip install -e .` (setuptools ≥ 64) installs an import hook instead of a path in `site-packages/__editable__.ppocrv5_onnx-*.pth`. Python can import the package, but static analyzers used by editors (Pylance/Pyright, Jedi) cannot follow the hook, so there is no autocompletion or go-to-definition. `compat` mode writes the repository path into the `.pth` file, which those tools understand. If you already installed without it, reinstall with the command above.
+> **Editor autocompletion:** editable installs default to setuptools' `editable_mode=compat` (via the small in-tree build backend in `_build_backend/`), which writes the repository path into `site-packages/__editable__.ppocrv5_onnx-*.pth`. Pylance/Pyright and Jedi can follow that path, unlike the import hook setuptools ≥ 64 installs by default. If you installed an older version in editable mode and get no completions, reinstall with `pip install -e .` and restart the language server. Another mode can still be chosen with `--config-settings editable_mode=strict`.
 
 ### Option 2: Install directly from GitHub
 ```sh
@@ -58,7 +58,7 @@ pip install git+https://github.com/HoVDuc/ppocrv5-onnx.git
 ### Option 3: Using uv (if already in project directory)
 ```sh
 uv sync
-uv pip install -e . -C editable_mode=compat
+uv pip install -e .
 ```
 
 If you are on a headless server and encounter display issues, you can swap OpenCV with:
@@ -281,6 +281,7 @@ ppocrv5-onnx/
 ├── config_ppocrv6.yaml      # Local PP-OCRv6 medium path example
 ├── config_mix_v5det_v6rec.yaml
 ├── pyproject.toml           # Project dependencies
+├── _build_backend/          # setuptools wrapper: editable installs use compat mode
 ├── ppocrv5_onnx/
 │   ├── __init__.py          # Exports: OCRPipeline, Detector, Recognizer, etc.
 │   ├── pipeline.py          # Main OCRPipeline class

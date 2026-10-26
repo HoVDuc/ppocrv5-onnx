@@ -108,3 +108,26 @@ def test_target_install_contains_python_modules(tmp_path: Path) -> None:
 
     for forbidden_dir in forbidden_dirs:
         assert not forbidden_dir.exists(), forbidden_dir
+
+
+def test_editable_install_defaults_to_compat_mode(monkeypatch) -> None:
+    """Editable installs default to editable_mode=compat so editors resolve the package."""
+    project_root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(project_root / "_build_backend"))
+    import backend
+    from setuptools import build_meta
+
+    seen: list[dict] = []
+    monkeypatch.setattr(
+        build_meta,
+        "build_editable",
+        lambda wheel_dir, config_settings=None, metadata_dir=None: seen.append(
+            config_settings
+        )
+        or "fake.whl",
+    )
+
+    assert backend.build_editable("out") == "fake.whl"
+    assert backend.build_editable("out", {"editable_mode": "strict"}) == "fake.whl"
+    assert seen == [{"editable_mode": "compat"}, {"editable_mode": "strict"}]
+    assert backend.build_wheel is build_meta.build_wheel
