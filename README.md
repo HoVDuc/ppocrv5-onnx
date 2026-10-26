@@ -171,7 +171,7 @@ pipeline = OCRPipeline.from_pretrained("ppocrv6_medium")
 # Method 2: From YAML config file
 pipeline = OCRPipeline.from_config("config.yaml")
 
-# Run OCR
+# Run OCR (path, PIL Image, or numpy array in BGR order as returned by cv2.imread)
 results = pipeline("path/to/image.jpg")
 for r in results:
     print(f"Text: {r.text}, Score: {r.score:.3f}")
@@ -207,11 +207,26 @@ pipeline = OCRPipeline.from_pretrained(
 
 pipeline = OCRPipeline.from_mix("ppocrv5_mobile", "ppocrv6_medium")
 
-# With GPU support
+# With GPU support. A bare "CUDAExecutionProvider" gets memory-safe defaults
+# (arena_extend_strategy=kSameAsRequested, cudnn_conv_algo_search=HEURISTIC,
+# cudnn_conv_use_max_workspace=0) so GPU memory does not keep growing across
+# images of different sizes.
 pipeline = OCRPipeline.from_pretrained(
     "mobile",
     det_providers=["CUDAExecutionProvider"],
     rec_providers=["CUDAExecutionProvider"]
+)
+
+# Pass explicit provider options (used as-is) and/or SessionOptions
+import onnxruntime as ort
+cuda = ("CUDAExecutionProvider", {"gpu_mem_limit": 8 * 1024**3, "arena_extend_strategy": "kSameAsRequested"})
+sess_options = ort.SessionOptions()
+sess_options.intra_op_num_threads = 4
+pipeline = OCRPipeline.from_pretrained(
+    "server",
+    det_providers=[cuda, "CPUExecutionProvider"],
+    rec_providers=[cuda, "CPUExecutionProvider"],
+    sess_options=sess_options,
 )
 
 # Enable visualization (saves result to output folder)

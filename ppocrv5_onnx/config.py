@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 import os
+import shutil
+import tempfile
 import urllib.request
 import zipfile
 
@@ -312,19 +314,48 @@ def _ensure_model_artifacts(preset: ModelPreset) -> None:
 
 def _download_if_missing(preset: ModelPreset) -> None:
     """Download and extract a model artifact when it is absent."""
-    if preset.model_path.exists() and (preset.model_dir_path / "inference.yml").exists():
+    if _is_complete(preset):
         return
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("Downloading {} from {}", preset.model_dir_path, preset.download_url)
 
-    temp_zip = MODELS_DIR / preset.zip_name
-    urllib.request.urlretrieve(preset.download_url, temp_zip)
-    try:
+    # Download and extract into a private staging directory, then move the model
+    # directory into place in one rename. An interrupted run or a concurrent
+    # process can then never leave a half-written model in the cache.
+    with tempfile.TemporaryDirectory(
+        dir=MODELS_DIR, prefix=f".{preset.model_dir}-"
+    ) as staging:
+        staging_dir = Path(staging)
+        temp_zip = staging_dir / preset.zip_name
+        urllib.request.urlretrieve(preset.download_url, temp_zip)
         with zipfile.ZipFile(temp_zip, "r") as zip_ref:
-            zip_ref.extractall(MODELS_DIR)
-    finally:
-        temp_zip.unlink(missing_ok=True)
+            zip_ref.extractall(staging_dir / "extracted")
+
+        extracted = staging_dir / "extracted" / preset.model_dir
+        if not (
+            (extracted / "inference.onnx").exists()
+            and (extracted / "inference.yml").exists()
+        ):
+            raise FileNotFoundError(
+                f"{preset.zip_name} does not contain "
+                f"{preset.model_dir}/inference.onnx and inference.yml"
+            )
+
+        if _is_complete(preset):
+            return  # another process finished the same download first
+        if preset.model_dir_path.exists():
+            shutil.rmtree(preset.model_dir_path)  # incomplete leftover
+        try:
+            os.replace(extracted, preset.model_dir_path)
+        except OSError:
+            if not _is_complete(preset):
+                raise
+
+
+def _is_complete(preset: ModelPreset) -> bool:
+    """Return whether the cached model directory has the ONNX model and inference.yml."""
+    return preset.model_path.exists() and (preset.model_dir_path / "inference.yml").exists()
 
 
 def _warn_on_dict_override(rec_model: str, rec_config: dict[str, Any]) -> None:

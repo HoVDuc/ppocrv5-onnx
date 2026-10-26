@@ -4,10 +4,16 @@ import numpy as np
 import onnxruntime as ort
 from typing import List, Optional
 from .postprocess import CTCLabelDecode
+from ..utils import create_session
 from typing import List, Union, Tuple, Optional
 
 class Recognizer:
-    def __init__(self, config, providers: Optional[List[str]] = None):
+    def __init__(
+        self,
+        config,
+        providers: Optional[List[str]] = None,
+        sess_options: Optional[ort.SessionOptions] = None,
+    ):
         charset_path = config.dict_path
         model_path = config.path
         if not str(model_path).endswith(".onnx"):
@@ -24,10 +30,7 @@ class Recognizer:
             use_space_char=True,
         )
 
-        self.session = ort.InferenceSession(
-            model_path,
-            providers=providers or ["CPUExecutionProvider"],
-        )
+        self.session = create_session(model_path, providers, sess_options)
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 

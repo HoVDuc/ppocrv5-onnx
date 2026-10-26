@@ -6,17 +6,20 @@ from typing import List, Optional
 from .preprocess import DetResize, NormalizeImage
 from .crop_poly import CropPoly
 from .postprocess import DBPostProcess
+from ..utils import create_session
 
 
 class Detector:
-    def __init__(self, config, providers: Optional[List[str]] = None):
+    def __init__(
+        self,
+        config,
+        providers: Optional[List[str]] = None,
+        sess_options: Optional[ort.SessionOptions] = None,
+    ):
         model_path = config.path
         if not str(model_path).endswith(".onnx"):
             raise ValueError(f"Model path must end with .onnx: {model_path}")
-        self.session = ort.InferenceSession(
-            model_path,
-            providers=providers or ["CPUExecutionProvider"],
-        )
+        self.session = create_session(model_path, providers, sess_options)
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
