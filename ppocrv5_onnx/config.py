@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Iterator, TypeVar
 import os
-import shutil
 import tempfile
+import time
 import urllib.request
 import zipfile
 
@@ -318,11 +319,22 @@ def _download_if_missing(preset: ModelPreset) -> None:
         return
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    # Only one process at a time downloads or replaces a given model; the others
+    # wait and then reuse its result. Readers never take the lock: a complete
+    # model directory is never modified.
+    with _model_lock(preset):
+        if _is_complete(preset):
+            return  # another process finished the download while we waited
+        _download_and_install(preset)
+
+
+def _download_and_install(preset: ModelPreset) -> None:
+    """Download a model and move it into the cache; caller holds the model lock."""
     logger.info("Downloading {} from {}", preset.model_dir_path, preset.download_url)
 
     # Download and extract into a private staging directory, then move the model
-    # directory into place in one rename. An interrupted run or a concurrent
-    # process can then never leave a half-written model in the cache.
+    # directory into place in one rename, so an interrupted run never leaves a
+    # half-written model in the cache.
     with tempfile.TemporaryDirectory(
         dir=MODELS_DIR, prefix=f".{preset.model_dir}-"
     ) as staging:
@@ -342,15 +354,46 @@ def _download_if_missing(preset: ModelPreset) -> None:
                 f"{preset.model_dir}/inference.onnx and inference.yml"
             )
 
-        if _is_complete(preset):
-            return  # another process finished the same download first
+        # Under the lock, anything already at the target is an incomplete leftover
+        # (e.g. an interrupted older download): move it aside, to be removed with
+        # the staging directory.
         if preset.model_dir_path.exists():
-            shutil.rmtree(preset.model_dir_path)  # incomplete leftover
-        try:
-            os.replace(extracted, preset.model_dir_path)
-        except OSError:
-            if not _is_complete(preset):
-                raise
+            os.rename(preset.model_dir_path, staging_dir / "stale")
+        os.rename(extracted, preset.model_dir_path)
+
+
+@contextmanager
+def _model_lock(preset: ModelPreset) -> Iterator[None]:
+    """Hold an exclusive per-model lock across processes.
+
+    The OS releases the lock when the holder exits, so a crashed download never
+    leaves a stale lock behind.
+    """
+    lock_path = MODELS_DIR / f".{preset.model_dir}.lock"
+    with open(lock_path, "a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.1)
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _is_complete(preset: ModelPreset) -> bool:

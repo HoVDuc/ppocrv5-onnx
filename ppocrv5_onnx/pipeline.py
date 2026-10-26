@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import cv2
+import hashlib
 import time
 import numpy as np
 import onnxruntime as ort
@@ -296,7 +297,10 @@ class OCRPipeline:
     def _visualization_path(save_dir: Path, source_path: Optional[Path]) -> Path:
         """Name the output after the input file, or number it so in-memory inputs never overwrite each other."""
         if source_path is not None:
-            return save_dir / f"{source_path.stem}_ocr_result.png"
+            # The hash of the absolute path keeps same-named files from different
+            # directories apart, while re-running one file replaces its own result.
+            path_hash = hashlib.sha1(str(source_path.resolve()).encode("utf-8")).hexdigest()[:8]
+            return save_dir / f"{source_path.stem}_{path_hash}_ocr_result.png"
         save_path = save_dir / "ocr_result.png"
         index = 1
         while save_path.exists():

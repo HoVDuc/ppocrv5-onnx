@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -152,6 +154,11 @@ def _serve_zip(
     monkeypatch.setattr(config_module.urllib.request, "urlretrieve", fake_urlretrieve)
 
 
+def _cache_entries(models_dir: Path) -> list[str]:
+    """Cache contents, ignoring the per-model lock files that are kept on purpose."""
+    return sorted(p.name for p in models_dir.iterdir() if p.suffix != ".lock")
+
+
 VALID_MEMBERS = {
     "Fake_det/inference.onnx": b"onnx",
     "Fake_det/inference.yml": b"Global: {}\n",
@@ -166,7 +173,7 @@ def test_download_places_model_and_leaves_no_staging(
     config_module._download_if_missing(PRESET)
 
     assert PRESET.model_path.read_bytes() == b"onnx"
-    assert sorted(p.name for p in models_dir.iterdir()) == ["Fake_det"]
+    assert _cache_entries(models_dir) == ["Fake_det"]
 
 
 def test_download_replaces_incomplete_leftover(
@@ -194,7 +201,7 @@ def test_interrupted_download_leaves_cache_untouched(
     with pytest.raises(ConnectionError):
         config_module._download_if_missing(PRESET)
 
-    assert list(models_dir.iterdir()) == []
+    assert _cache_entries(models_dir) == []
 
 
 def test_zip_without_model_files_raises_and_leaves_cache_untouched(
@@ -205,24 +212,61 @@ def test_zip_without_model_files_raises_and_leaves_cache_untouched(
     with pytest.raises(FileNotFoundError, match="does not contain"):
         config_module._download_if_missing(PRESET)
 
-    assert list(models_dir.iterdir()) == []
+    assert _cache_entries(models_dir) == []
 
 
-def test_download_keeps_copy_finished_by_another_process(
+def test_concurrent_downloads_install_once_and_never_remove_a_complete_model(
     models_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def concurrent_urlretrieve(url: str, filename: Path) -> None:
-        # Simulate another process completing the same model meanwhile.
-        PRESET.model_dir_path.mkdir(parents=True)
-        PRESET.model_path.write_bytes(b"other")
-        (PRESET.model_dir_path / "inference.yml").write_text("Global: {}\n")
-        _make_zip(Path(filename), VALID_MEMBERS)
+    """Overlapping downloads (with an incomplete leftover in place) are serialised.
 
-    monkeypatch.setattr(
-        config_module.urllib.request, "urlretrieve", concurrent_urlretrieve
-    )
+    Only one worker downloads; the others reuse its result, and once the model is
+    complete it never disappears again, so a pipeline loading it cannot fail.
+    """
+    PRESET.model_dir_path.mkdir(parents=True)
+    PRESET.model_path.write_bytes(b"trunc")  # incomplete leftover
+    source = tmp_path / "source.zip"
+    _make_zip(source, VALID_MEMBERS)
+    downloads: list[int] = []
 
-    config_module._download_if_missing(PRESET)
+    def slow_urlretrieve(url: str, filename: Path) -> None:
+        downloads.append(threading.get_ident())
+        time.sleep(0.2)
+        Path(filename).write_bytes(source.read_bytes())
 
-    assert PRESET.model_path.read_bytes() == b"other"
-    assert sorted(p.name for p in models_dir.iterdir()) == ["Fake_det"]
+    monkeypatch.setattr(config_module.urllib.request, "urlretrieve", slow_urlretrieve)
+
+    done = threading.Event()
+    regressions: list[str] = []
+
+    def watch() -> None:
+        seen_complete = False
+        while not done.is_set():
+            complete = config_module._is_complete(PRESET)
+            if seen_complete and not complete:
+                regressions.append("complete model disappeared")
+            seen_complete = seen_complete or complete
+
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            config_module._download_if_missing(PRESET)
+        except BaseException as exc:  # pragma: no cover - surfaced below
+            errors.append(exc)
+
+    watcher = threading.Thread(target=watch)
+    watcher.start()
+    workers = [threading.Thread(target=worker) for _ in range(4)]
+    for thread in workers:
+        thread.start()
+    for thread in workers:
+        thread.join()
+    done.set()
+    watcher.join()
+
+    assert errors == []
+    assert len(downloads) == 1
+    assert regressions == []
+    assert PRESET.model_path.read_bytes() == b"onnx"
+    assert _cache_entries(models_dir) == ["Fake_det"]
